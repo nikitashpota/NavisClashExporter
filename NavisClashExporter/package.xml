@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<plugin-bundle>
+	<runtime version="2.0"/>
+	<plugin id="NavisClashExporter" application-version="2023">
+		<assembly>NavisClashExporter.dll</assembly>
+		<classname>NavisClashExporter.Application</classname>
+		<display-name>ClashRunner</display-name>
+		<description>Автопроверка коллизий</description>
+		<icon>icon.png</icon>
+		<version major="1" minor="0" build="0"/>
+		<publisher>getBIM</publisher>
+		<company>getBIM</company>
+	</plugin>
+</plugin-bundle>

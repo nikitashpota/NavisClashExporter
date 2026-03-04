@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35919.96
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NavisClashExporter", "NavisClashExporter\NavisClashExporter.csproj", "{0F34DA1B-F487-4075-8413-22E09235DE1D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0F34DA1B-F487-4075-8413-22E09235DE1D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0F34DA1B-F487-4075-8413-22E09235DE1D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0F34DA1B-F487-4075-8413-22E09235DE1D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0F34DA1B-F487-4075-8413-22E09235DE1D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {BEF76B74-9A49-443D-8CC1-B83457AAB362}
+	EndGlobalSection
+EndGlobal
