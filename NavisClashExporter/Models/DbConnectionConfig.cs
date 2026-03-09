@@ -11,7 +11,9 @@ namespace NavisClashExporter.Models
         public string Password { get; set; } = "12345678";
 
         public string ToConnectionString() =>
-            $"Host={Host};Port={Port};Database={Database};Username={Username};Password={Password};Timeout=5;Command Timeout=30";
+    $"Host={Host};Port={Port};Database={Database};Username={Username};Password={Password};" +
+    $"Timeout=5;Command Timeout=30;" +
+    $"Pooling=true;Minimum Pool Size=1;Maximum Pool Size=5;";
 
         public string Serialize() => JsonConvert.SerializeObject(this);
 

@@ -4,7 +4,6 @@ using System.Windows;
 using System.Windows.Controls;
 using NavisClashExporter.Models;
 using NavisClashExporter.Services;
-using NavisClashExporter.UI;
 
 namespace NavisClashExporter.UI
 {
@@ -19,7 +18,8 @@ namespace NavisClashExporter.UI
         {
             InitializeComponent();
             _connService = new DatabaseConnectionService();
-            TryConnect();
+            // TryConnect вызывается после показа окна
+            this.Loaded += (s, e) => TryConnect();
         }
 
         private void TryConnect()
@@ -67,7 +67,7 @@ namespace NavisClashExporter.UI
         private void ShowSettings(bool firstRun = false)
         {
             var vm = new SettingsWindow(_connService);
-            vm.Owner = this;
+            vm.Owner = this; // безопасно — окно уже показано через Loaded
             if (vm.ShowDialog() == true)
                 Connect(_connService.Config.ToConnectionString());
             else if (firstRun)

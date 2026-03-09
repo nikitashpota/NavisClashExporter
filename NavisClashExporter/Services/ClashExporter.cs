@@ -24,33 +24,99 @@ namespace NavisClashExporter.Services
 
         public void Export(NavisworksProjectModel project)
         {
-            Logger.Log($"Export: {project.Name}");
-            OnProgress?.Invoke("Удаление старых данных...");
-            _db.DeleteClashDataForProject(project.Id);
-
-            var doc = Autodesk.Navisworks.Api.Application.ActiveDocument;
-            if (doc == null) throw new Exception("Документ не открыт");
-
-            doc.Models.ResetAllHidden();
-            var testsData = doc.GetClash().TestsData;
-            testsData.TestsRunAllTests();
-            testsData.TestsCompactAllTests();
-
-            var tests = testsData.Tests;
-            int i = 0;
-            foreach (var test in tests)
+            try
             {
-                i++;
-                if (!(test is ClashTest ct)) continue;
-                OnProgress?.Invoke($"Тест {i}/{tests.Count}: {ct.DisplayName}");
-                ProcessTest(doc, ct, project.Id);
+                Logger.Log($"=== Export START: {project.Name} ===");
+                OnProgress?.Invoke("Удаление старых данных...");
+
+                Logger.Log("Шаг 1: DeleteClashDataForProject");
+                _db.DeleteClashDataForProject(project.Id);
+                Logger.Log("Шаг 1: OK");
+
+                Logger.Log("Шаг 2: Получение ActiveDocument");
+                var doc = Autodesk.Navisworks.Api.Application.ActiveDocument;
+                if (doc == null)
+                    throw new Exception("Документ не открыт");
+
+                // ✅ Открываем NWF файл если не открыт или открыт другой
+                if (string.IsNullOrEmpty(doc.FileName) ||
+                    !doc.FileName.Equals(project.NwfPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    Logger.Log($"Шаг 2: Открываем файл: {project.NwfPath}");
+                    OnProgress?.Invoke($"Открытие файла: {Path.GetFileName(project.NwfPath)}");
+
+                    if (!File.Exists(project.NwfPath))
+                        throw new Exception($"NWF файл не найден: {project.NwfPath}");
+
+                    doc.Clear();
+                    doc.AppendFile(project.NwfPath);
+                    Logger.Log("Шаг 2: Файл открыт");
+                }
+                Logger.Log($"Шаг 2: OK — {doc.FileName}");
+
+                Logger.Log("Шаг 3: ResetAllHidden");
+                doc.Models.ResetAllHidden();
+                Logger.Log("Шаг 3: OK");
+
+                Logger.Log("Шаг 4: GetClash().TestsData");
+                var testsData = doc.GetClash().TestsData;
+                Logger.Log($"Шаг 4: OK — testsData is null: {testsData == null}");
+
+                Logger.Log("Шаг 5: TestsRunAllTests");
+                testsData.TestsRunAllTests();
+                Logger.Log("Шаг 5: OK");
+
+                Logger.Log("Шаг 6: TestsCompactAllTests");
+                testsData.TestsCompactAllTests();
+                Logger.Log("Шаг 6: OK");
+
+                var tests = testsData.Tests;
+                Logger.Log($"Шаг 7: Тестов найдено: {tests.Count}");
+
+                int i = 0;
+                foreach (var test in tests)
+                {
+                    i++;
+                    if (!(test is ClashTest ct))
+                    {
+                        Logger.Log($"Тест {i}: не ClashTest, пропускаем");
+                        continue;
+                    }
+
+                    Logger.Log($"Тест {i}/{tests.Count}: {ct.DisplayName}");
+                    OnProgress?.Invoke($"Тест {i}/{tests.Count}: {ct.DisplayName}");
+
+                    try
+                    {
+                        ProcessTest(doc, ct, project.Id);
+                        Logger.Log($"Тест {i}: обработан успешно");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex);
+                        Logger.Log($"Тест {i}: ОШИБКА — {ex.Message}");
+                        // Продолжаем со следующим тестом
+                    }
+                }
+
+                OnProgress?.Invoke("Готово");
+                Logger.Log("=== Export DONE ===");
             }
-            OnProgress?.Invoke("Готово");
+            catch (Exception ex)
+            {
+                Logger.LogError(ex);
+                OnProgress?.Invoke($"Ошибка: {ex.Message}");
+                throw;
+            }
         }
 
         private void ProcessTest(Document doc, ClashTest ct, int projectId)
         {
+            Logger.Log($"  ProcessTest: {ct.DisplayName}");
+
             var children = ct.Children.Cast<ClashResult>().ToList();
+            Logger.Log($"  Коллизий: {children.Count}");
+
             int total = children.Count;
             int newC = children.Count(x => x.Status == ClashResultStatus.New);
             int active = children.Count(x => x.Status == ClashResultStatus.Active);
@@ -58,6 +124,9 @@ namespace NavisClashExporter.Services
             int approved = children.Count(x => x.Status == ClashResultStatus.Approved);
             int resolved = children.Count(x => x.Status == ClashResultStatus.Resolved);
 
+            Logger.Log($"  Статистика: total={total} new={newC} active={active}");
+
+            Logger.Log("  InsertClashTest...");
             int testId = _db.InsertClashTest(new ClashTestModel
             {
                 NavisworksProjectId = projectId,
@@ -74,17 +143,39 @@ namespace NavisClashExporter.Services
                 SummaryApproved = approved,
                 SummaryResolved = resolved
             });
+            Logger.Log($"  InsertClashTest OK: id={testId}");
 
+            Logger.Log("  UpsertClashTestHistory...");
             _db.UpsertClashTestHistory(projectId, ct.DisplayName,
                 total, newC, active, reviewed, approved, resolved);
+            Logger.Log("  UpsertClashTestHistory OK");
 
-            var results = children
+            var filtered = children
                 .Where(c => c.Status == ClashResultStatus.New || c.Status == ClashResultStatus.Active)
-                .Select(clash =>
+                .ToList();
+            Logger.Log($"  Фильтрованных (New+Active): {filtered.Count}");
+
+            var results = new List<ClashResultModel>();
+            int clashIdx = 0;
+            foreach (var clash in filtered)
+            {
+                clashIdx++;
+                Logger.Log($"  Коллизия {clashIdx}/{filtered.Count}: {clash.DisplayName}");
+                try
                 {
                     var m1 = clash.CompositeItem1 as ModelItem;
                     var m2 = clash.CompositeItem2 as ModelItem;
-                    return new ClashResultModel
+                    Logger.Log($"    m1={m1?.DisplayName ?? "null"} m2={m2?.DisplayName ?? "null"}");
+
+                    byte[] img = null;
+                    if (_exportImages)
+                    {
+                        Logger.Log("    GenerateImage...");
+                        img = GenerateImage(doc, m1, m2);
+                        Logger.Log($"    GenerateImage: {(img != null ? img.Length + " bytes" : "null")}");
+                    }
+
+                    results.Add(new ClashResultModel
                     {
                         ClashTestId = testId,
                         Guid = clash.Guid.ToString(),
@@ -97,7 +188,7 @@ namespace NavisClashExporter.Services
                         PointY = clash.Center.Y * 0.3048,
                         PointZ = clash.Center.Z * 0.3048,
                         CreatedDate = clash.CreatedTime,
-                        Image = _exportImages ? GenerateImage(doc, m1, m2) : null,
+                        Image = img,
                         Item1Id = Prop(m1, "ID объекта", "Значение"),
                         Item1Name = Prop(m1, "Элемент", "Имя"),
                         Item1Type = Prop(m1, "Элемент", "Тип"),
@@ -108,23 +199,40 @@ namespace NavisClashExporter.Services
                         Item2Type = Prop(m2, "Элемент", "Тип"),
                         Item2Layer = Prop(m2, "Элемент", "Слой"),
                         Item2SourceFile = Prop(m2, "Элемент", "Файл источника")
-                    };
-                }).ToList();
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"    ОШИБКА коллизии {clashIdx}: {ex.Message}");
+                }
+            }
 
+            Logger.Log($"  InsertClashResults: {results.Count} записей...");
             _db.InsertClashResults(results);
+            Logger.Log("  InsertClashResults OK");
         }
 
         private string GetLocator(ClashSelection sel)
         {
             if (sel == null) return "";
-            try { var items = sel.Selection?.GetSelectedItems(); return items?.Count > 0 ? items[0]?.DisplayName ?? "" : ""; }
+            try
+            {
+                var items = sel.Selection?.GetSelectedItems();
+                return items?.Count > 0 ? items[0]?.DisplayName ?? "" : "";
+            }
             catch { return ""; }
         }
 
         private string Prop(ModelItem item, string cat, string prop)
         {
             if (item == null) return "";
-            try { return item.PropertyCategories.FindPropertyByDisplayName(cat, prop)?.Value?.ToDisplayString()?.Replace(",", ".") ?? ""; }
+            try
+            {
+                return item.PropertyCategories
+                    .FindPropertyByDisplayName(cat, prop)?
+                    .Value?.ToDisplayString()?
+                    .Replace(",", ".") ?? "";
+            }
             catch { return ""; }
         }
 
@@ -143,17 +251,19 @@ namespace NavisClashExporter.Services
                 doc.ActiveView.LookFromFrontRightTop();
                 doc.ActiveView.RequestDelayedRedraw(ViewRedrawRequests.All);
 
-                // ✅ Исправлено: правильная сигнатура GenerateImage
                 var img = doc.ActiveView.GenerateImage(ImageGenerationStyle.Scene, 500, 500);
 
-                // ✅ Исправлено: using-блок вместо using-объявления (C# 7.3)
                 using (var ms = new MemoryStream())
                 {
                     img.Save(ms, ImageFormat.Png);
                     return ms.ToArray();
                 }
             }
-            catch (Exception ex) { Logger.LogError(ex); return null; }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex);
+                return null;
+            }
         }
     }
 }

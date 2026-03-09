@@ -245,7 +245,7 @@ namespace NavisClashExporter.Services
             cmd.Parameters.AddWithValue("tot", t.SummaryTotal); cmd.Parameters.AddWithValue("new", t.SummaryNew);
             cmd.Parameters.AddWithValue("act", t.SummaryActive); cmd.Parameters.AddWithValue("rev", t.SummaryReviewed);
             cmd.Parameters.AddWithValue("app", t.SummaryApproved); cmd.Parameters.AddWithValue("res", t.SummaryResolved);
-            return (int)(long)cmd.ExecuteScalar();
+            return Convert.ToInt32(cmd.ExecuteScalar());
         }
 
         // ── CLASH RESULTS ──────────────────────────────────────────────

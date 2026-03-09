@@ -42,24 +42,23 @@ namespace NavisClashExporter.UI
             Password = txtPassword.Password
         };
 
-        private async void OnTest_Click(object s, RoutedEventArgs e)
+        // Синхронная проверка — без async/await (Navisworks не поддерживает корректно)
+        private void OnTest_Click(object s, RoutedEventArgs e)
         {
             txtTestResult.Text = "Проверяю...";
+            txtTestResult.Foreground = System.Windows.Media.Brushes.Gray;
+
             var cfg = BuildConfig();
             try
             {
-                await System.Threading.Tasks.Task.Run(() =>
+                using (var conn = new NpgsqlConnection(cfg.ToConnectionString()))
                 {
-                    var conn = new NpgsqlConnection(cfg.ToConnectionString());
                     conn.Open();
                     var cmd = new NpgsqlCommand("SELECT version()", conn);
                     var ver = cmd.ExecuteScalar()?.ToString();
-                    Dispatcher.Invoke(() =>
-                    {
-                        txtTestResult.Text = $"✓ Успешно!\n{ver}";
-                        txtTestResult.Foreground = System.Windows.Media.Brushes.Green;
-                    });
-                });
+                    txtTestResult.Text = $"✓ Успешно!\n{ver}";
+                    txtTestResult.Foreground = System.Windows.Media.Brushes.Green;
+                }
             }
             catch (Exception ex)
             {
